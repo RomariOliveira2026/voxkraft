@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="1080">
+      <stop offset="0%" stop-color="#020B3A"/>
+      <stop offset="100%" stop-color="#061028"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="75%" cy="45%" r="45%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#020B3A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <circle cx="200" cy="150" r="2" fill="#D4A853" opacity="0.7"/>
+  <circle cx="1700" cy="200" r="1.5" fill="#D4A853" opacity="0.5"/>
+  <path d="M80 540 Q200 500 320 540 T560 540" stroke="#3B82F6" stroke-width="2" fill="none" opacity="0.5"/>
+  <text x="100" y="120" fill="#D4A853" font-size="22" font-family="system-ui,sans-serif" font-weight="700" letter-spacing="6">VOXCRAFT</text>
+  <text x="100" y="180" fill="#3B82F6" font-size="18" font-family="system-ui,sans-serif" font-weight="600">Texto → Áudio</text>
+  <text x="100" y="300" fill="#C8D4E8" font-size="48" font-family="system-ui,sans-serif" font-weight="800">Como transformar textos em áudio profissional</text>
+  <rect x="1200" y="400" width="280" height="360" rx="12" fill="#0A1640" stroke="#C8D4E8" stroke-width="2"/><line x1="1240" y1="460" x2="1440" y2="460" stroke="#C8D4E8" stroke-width="3" opacity="0.5"/><path d="M1560 500 Q1620 420 1680 500" stroke="#3B82F6" stroke-width="4" fill="none"/>
+  <rect x="100" y="980" width="200" height="4" rx="2" fill="#D4A853" opacity="0.8"/>
+</svg>
