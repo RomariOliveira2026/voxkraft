@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
+import { HeaderCtaButton } from "@/components/site/header-cta-button";
 import { allArticles } from "@/lib/blog/posts";
 import { getCategoryById } from "@/lib/blog/categories";
 
@@ -32,19 +33,14 @@ export default function Inicio() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <a
               href="/login"
               className="hidden text-sm font-medium text-slate-300 transition hover:text-white sm:inline"
             >
               Entrar
             </a>
-            <a
-              href="/cadastro"
-              className="rounded-full bg-blue-600 px-5 py-2.5 text-sm font-bold transition hover:bg-blue-500"
-            >
-              Começar agora
-            </a>
+            <HeaderCtaButton />
           </div>
         </div>
       </header>
