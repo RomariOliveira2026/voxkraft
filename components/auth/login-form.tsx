@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth/validate";
+
+const REQUEST_TIMEOUT_MS = 15000;
 
 type LoginFormProps = {
   redirectTo?: string;
@@ -23,20 +25,37 @@ export function LoginForm({ redirectTo = "/dashboard" }: LoginFormProps) {
     const email = String(formData.get("email"));
     const password = String(formData.get("password"));
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    if (authError) {
-      setError(authError.message);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, redirectTo }),
+        signal: controller.signal,
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        redirectTo?: string;
+      };
+
+      if (!response.ok) {
+        setError(data.error ?? "Não foi possível entrar.");
+        return;
+      }
+
+      router.push(data.redirectTo ?? `${redirectTo}?login=sucesso`);
+      router.refresh();
+    } catch (err) {
+      setError(
+        authErrorMessage(err, "Não foi possível entrar. Tente novamente."),
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
-      return;
     }
-
-    router.push(redirectTo);
-    router.refresh();
   }
 
   return (
@@ -75,6 +94,7 @@ export function LoginForm({ redirectTo = "/dashboard" }: LoginFormProps) {
           name="password"
           type="password"
           required
+          minLength={8}
           placeholder="••••••••"
           className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition focus:border-blue-500"
         />

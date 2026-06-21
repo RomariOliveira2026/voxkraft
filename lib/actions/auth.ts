@@ -1,9 +1,18 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { clearDemoSession, getDemoSession } from "@/lib/auth/demo-session";
+import { createDemoProject } from "@/lib/demo-store";
+import { PROJECT_COLORS } from "@/lib/constants/projects";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 export async function signOut() {
+  if (!isSupabaseConfigured()) {
+    await clearDemoSession();
+    redirect("/login");
+  }
+
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
@@ -40,15 +49,23 @@ export async function updateProfile(formData: FormData) {
 }
 
 export async function createProject(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Informe o nome do projeto." };
+
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser) return { error: "Não autenticado." };
+
+    await createDemoProject(demoUser.id, name);
+    return { success: true };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return { error: "Não autenticado." };
-
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return { error: "Informe o nome do projeto." };
 
   const { count } = await supabase
     .from("projects")
@@ -60,12 +77,7 @@ export async function createProject(formData: FormData) {
   const { error } = await supabase.from("projects").insert({
     user_id: user.id,
     name,
-    color_class: [
-      "bg-blue-600/20 text-blue-300",
-      "bg-purple-600/20 text-purple-300",
-      "bg-emerald-600/20 text-emerald-300",
-      "bg-amber-600/20 text-amber-300",
-    ][colorIndex],
+    color_class: PROJECT_COLORS[colorIndex],
   });
 
   if (error) return { error: error.message };

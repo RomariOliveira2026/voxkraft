@@ -1,9 +1,38 @@
+import { getDemoSession } from "@/lib/auth/demo-session";
+import {
+  getDemoAudios,
+  getDemoDashboardMetrics,
+  getDemoProjects,
+  getDemoSubscription,
+} from "@/lib/demo-store";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { voiceCatalog } from "@/lib/voices/catalog";
 import type { Audio, Invoice, Project, Subscription, UserProfile, Voice } from "@/lib/types/database";
 
+function demoVoices(): Voice[] {
+  return voiceCatalog.map((voice) => ({
+    id: voice.slug,
+    name: voice.name,
+    style: voice.description,
+    elevenlabs_voice_id: voice.slug,
+    tags: voice.categories,
+    color_class: voice.colorClass,
+    is_premium: voice.isPremium ?? false,
+    preview_url: voice.previewUrl,
+  }));
+}
+
 export async function getCurrentUser() {
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser) return null;
+
+    return {
+      id: demoUser.id,
+      email: demoUser.email,
+    };
+  }
 
   const supabase = await createClient();
   const {
@@ -13,6 +42,22 @@ export async function getCurrentUser() {
 }
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser || demoUser.id !== userId) return null;
+
+    return {
+      id: demoUser.id,
+      full_name: demoUser.fullName,
+      company: null,
+      phone: null,
+      avatar_url: null,
+      default_voice_id: null,
+      default_export_format: "mp3",
+      email: demoUser.email,
+    };
+  }
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("users")
@@ -24,6 +69,12 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 }
 
 export async function getSubscription(userId: string): Promise<Subscription | null> {
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser || demoUser.id !== userId) return null;
+    return getDemoSubscription(userId);
+  }
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("subscriptions")
@@ -35,12 +86,20 @@ export async function getSubscription(userId: string): Promise<Subscription | nu
 }
 
 export async function getVoices(): Promise<Voice[]> {
+  if (!isSupabaseConfigured()) {
+    return demoVoices();
+  }
+
   const supabase = await createClient();
   const { data } = await supabase.from("voices").select("*").order("name");
   return data ?? [];
 }
 
 export async function getProjects(userId: string): Promise<Project[]> {
+  if (!isSupabaseConfigured()) {
+    return getDemoProjects(userId);
+  }
+
   const supabase = await createClient();
   const { data: projects } = await supabase
     .from("projects")
@@ -69,6 +128,10 @@ export async function getProjects(userId: string): Promise<Project[]> {
 }
 
 export async function getAudios(userId: string): Promise<Audio[]> {
+  if (!isSupabaseConfigured()) {
+    return getDemoAudios(userId);
+  }
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("audios")
@@ -80,6 +143,10 @@ export async function getAudios(userId: string): Promise<Audio[]> {
 }
 
 export async function getInvoices(userId: string): Promise<Invoice[]> {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("invoices")
@@ -91,6 +158,10 @@ export async function getInvoices(userId: string): Promise<Invoice[]> {
 }
 
 export async function getDashboardMetrics(userId: string) {
+  if (!isSupabaseConfigured()) {
+    return getDemoDashboardMetrics(userId);
+  }
+
   const supabase = await createClient();
   const subscription = await getSubscription(userId);
 
@@ -119,9 +190,4 @@ export async function getDashboardMetrics(userId: string) {
   };
 }
 
-export const PROJECT_COLORS = [
-  "bg-blue-600/20 text-blue-300",
-  "bg-purple-600/20 text-purple-300",
-  "bg-emerald-600/20 text-emerald-300",
-  "bg-amber-600/20 text-amber-300",
-];
+export { PROJECT_COLORS } from "@/lib/constants/projects";

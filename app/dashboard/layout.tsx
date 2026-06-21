@@ -1,5 +1,7 @@
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app/app-shell";
-import { SetupRequired } from "@/components/setup/setup-required";
+import { AuthFeedbackBanner } from "@/components/auth/auth-feedback-banner";
 import {
   getCurrentUser,
   getSubscription,
@@ -7,8 +9,8 @@ import {
 } from "@/lib/data";
 import { getPlanLabel } from "@/lib/plans";
 import { getInitials } from "@/lib/format";
+import { getDemoSession } from "@/lib/auth/demo-session";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
   children,
@@ -16,13 +18,19 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser) redirect("/login");
+
     return (
       <AppShell
-        userName="Configuração"
-        userInitials="VK"
-        planLabel="Ambiente local"
+        userName={demoUser.fullName}
+        userInitials={getInitials(demoUser.fullName)}
+        planLabel="Plano Essencial (demo)"
       >
-        <SetupRequired />
+        <Suspense fallback={null}>
+          <AuthFeedbackBanner />
+        </Suspense>
+        {children}
       </AppShell>
     );
   }
@@ -41,6 +49,9 @@ export default async function DashboardLayout({
       userInitials={getInitials(profile?.full_name ?? user.email)}
       planLabel={`Plano ${getPlanLabel(subscription?.plan ?? "free")}`}
     >
+      <Suspense fallback={null}>
+        <AuthFeedbackBanner />
+      </Suspense>
       {children}
     </AppShell>
   );

@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/auth/validate";
+
+const REQUEST_TIMEOUT_MS = 15000;
 
 export function SignupForm() {
   const router = useRouter();
@@ -15,28 +17,41 @@ export function SignupForm() {
     setError(null);
 
     const formData = new FormData(event.currentTarget);
-    const fullName = String(formData.get("full_name"));
+    const full_name = String(formData.get("full_name"));
     const email = String(formData.get("email"));
     const password = String(formData.get("password"));
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    if (authError) {
-      setError(authError.message);
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name, email, password }),
+        signal: controller.signal,
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        redirectTo?: string;
+      };
+
+      if (!response.ok) {
+        setError(data.error ?? "Não foi possível criar sua conta.");
+        return;
+      }
+
+      router.push(data.redirectTo ?? "/dashboard?cadastro=sucesso");
+      router.refresh();
+    } catch (err) {
+      setError(
+        authErrorMessage(err, "Não foi possível criar sua conta. Tente novamente."),
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (

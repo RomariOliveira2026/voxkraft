@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+import { getDemoSession } from "@/lib/auth/demo-session";
+import { deleteDemoAudio, getDemoAudioById } from "@/lib/demo-store";
+import { getCurrentUser } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -7,6 +11,21 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
+
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+
+    const audio = await getDemoAudioById(demoUser.id, id);
+    if (!audio) {
+      return NextResponse.json({ error: "Áudio não encontrado." }, { status: 404 });
+    }
+
+    return NextResponse.json({ url: audio.record.demo_url });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,6 +59,22 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
+
+  if (!isSupabaseConfigured()) {
+    const demoUser = await getDemoSession();
+    if (!demoUser) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+
+    const audio = await getDemoAudioById(demoUser.id, id);
+    if (!audio) {
+      return NextResponse.json({ error: "Áudio não encontrado." }, { status: 404 });
+    }
+
+    await deleteDemoAudio(demoUser.id, id);
+    return NextResponse.json({ success: true });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

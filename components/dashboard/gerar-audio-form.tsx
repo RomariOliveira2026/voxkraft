@@ -12,6 +12,8 @@ type GerarAudioFormProps = {
   initialProjectId?: string;
 };
 
+const REQUEST_TIMEOUT_MS = 30000;
+
 export function GerarAudioForm({
   voices,
   projects,
@@ -32,7 +34,9 @@ export function GerarAudioForm({
   const [similarity, setSimilarity] = useState(80);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [generatedTitle, setGeneratedTitle] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const charCount = text.length;
@@ -41,6 +45,10 @@ export function GerarAudioForm({
   async function handleGenerate() {
     setLoading(true);
     setError(null);
+    setSuccess(null);
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
       const response = await fetch("/api/audio/generate", {
@@ -54,19 +62,31 @@ export function GerarAudioForm({
           stability: stability / 100,
           similarity: similarity / 100,
         }),
+        signal: controller.signal,
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        error?: string;
+        url?: string;
+        audio?: { title: string };
+      };
 
       if (!response.ok) {
         throw new Error(data.error ?? "Erro ao gerar áudio.");
       }
 
-      setAudioUrl(data.url);
+      setAudioUrl(data.url ?? null);
+      setGeneratedTitle(data.audio?.title ?? "audio-voxkraft");
+      setSuccess("Áudio gerado com sucesso! Você já pode ouvir, baixar ou consultar no histórico.");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao gerar áudio.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Tempo esgotado. Tente novamente.");
+      } else {
+        setError(err instanceof Error ? err.message : "Erro ao gerar áudio.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }
@@ -82,6 +102,15 @@ export function GerarAudioForm({
     setIsPlaying(true);
   }
 
+  function handleDownload() {
+    if (!audioUrl) return;
+
+    const anchor = document.createElement("a");
+    anchor.href = audioUrl;
+    anchor.download = `${generatedTitle ?? "audio-voxkraft"}.mp3`;
+    anchor.click();
+  }
+
   return (
     <div className="space-y-8">
       <header>
@@ -95,6 +124,12 @@ export function GerarAudioForm({
       {error && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
+        </p>
+      )}
+
+      {success && (
+        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {success}
         </p>
       )}
 
@@ -200,7 +235,7 @@ export function GerarAudioForm({
 
           <div className="rounded-2xl border border-white/10 bg-[#0B102A] p-6">
             <p className="text-sm text-slate-400">Prévia do áudio</p>
-            <div className="mt-4 flex h-20 items-center justify-center rounded-xl bg-white/5">
+            <div className="mt-4 flex min-h-20 items-center justify-center rounded-xl bg-white/5">
               {audioUrl ? (
                 <audio
                   ref={audioRef}
@@ -210,7 +245,7 @@ export function GerarAudioForm({
                   controls
                 />
               ) : (
-                <div className="flex items-end gap-1">
+                <div className="flex items-end gap-1 py-4">
                   {[3, 5, 8, 4, 7, 5, 9, 6, 4, 7, 5, 3].map((h, i) => (
                     <div
                       key={i}
@@ -237,6 +272,14 @@ export function GerarAudioForm({
               className="mt-3 w-full rounded-full border border-white/10 px-6 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:opacity-40"
             >
               {isPlaying ? "Pausar prévia" : "Ouvir prévia"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={!audioUrl}
+              className="mt-3 w-full rounded-full border border-blue-500/30 bg-blue-600/10 px-6 py-3 text-sm font-medium text-blue-300 transition hover:bg-blue-600/20 disabled:opacity-40"
+            >
+              Baixar áudio demo
             </button>
           </div>
         </div>

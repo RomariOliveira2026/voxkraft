@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export function ResetPasswordForm() {
   const [message, setMessage] = useState<string | null>(null);
@@ -17,18 +17,34 @@ export function ResetPasswordForm() {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email"));
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
-    });
+    try {
+      if (!isSupabaseConfigured()) {
+        setError(
+          "Recuperação de senha indisponível no modo demonstração. Configure o Supabase para usar este recurso.",
+        );
+        return;
+      }
 
-    if (authError) {
-      setError(authError.message);
-    } else {
-      setMessage("Enviamos um link de recuperação para o seu e-mail.");
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+
+      if (authError) {
+        setError(authError.message);
+      } else {
+        setMessage("Enviamos um link de recuperação para o seu e-mail.");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível enviar o link de recuperação.",
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
