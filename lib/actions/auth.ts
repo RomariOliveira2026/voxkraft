@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { clearDemoSession, getDemoSession } from "@/lib/auth/demo-session";
-import { createDemoProject } from "@/lib/demo-store";
 import { PROJECT_COLORS } from "@/lib/constants/projects";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -56,8 +55,7 @@ export async function createProject(formData: FormData) {
     const demoUser = await getDemoSession();
     if (!demoUser) return { error: "Não autenticado." };
 
-    await createDemoProject(demoUser.id, name);
-    return { success: true };
+    return { success: true, clientSide: true };
   }
 
   const supabase = await createClient();

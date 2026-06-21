@@ -2,30 +2,62 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { isDemoMode } from "@/lib/config/demo-mode";
 import { createProject } from "@/lib/actions/auth";
+import {
+  createClientDemoProject,
+  getClientProjects,
+} from "@/lib/demo-store/client-store";
+import { useDemoStoreVersion } from "@/lib/demo-store/use-demo-store";
 import type { Project } from "@/lib/types/database";
 import { formatRelativeUpdate } from "@/lib/format";
 
 type ProjetosClientProps = {
   projects: Project[];
+  userId: string;
+  demoMode?: boolean;
 };
 
-export function ProjetosClient({ projects }: ProjetosClientProps) {
+export function ProjetosClient({ projects, userId, demoMode = false }: ProjetosClientProps) {
   const router = useRouter();
+  const useLocalStore = demoMode || isDemoMode();
+  const storeVersion = useDemoStoreVersion(useLocalStore);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const sourceProjects = useMemo(() => {
+    if (!useLocalStore) return projects;
+    return getClientProjects(userId);
+  }, [projects, useLocalStore, userId, storeVersion]);
+
   async function handleCreate(formData: FormData) {
     setLoading(true);
     setError(null);
+
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) {
+      setError("Informe o nome do projeto.");
+      setLoading(false);
+      return;
+    }
+
+    if (useLocalStore) {
+      createClientDemoProject(userId, name);
+      setShowForm(false);
+      setLoading(false);
+      router.refresh();
+      return;
+    }
+
     const result = await createProject(formData);
     if (result?.error) {
       setError(result.error);
       setLoading(false);
       return;
     }
+
     setShowForm(false);
     setLoading(false);
     router.refresh();
@@ -83,7 +115,7 @@ export function ProjetosClient({ projects }: ProjetosClientProps) {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {projects.map((project) => (
+        {sourceProjects.map((project) => (
           <article
             key={project.id}
             className="group rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:border-white/20"

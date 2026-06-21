@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ProjetosClient } from "@/components/dashboard/projetos-client";
+import { isDemoMode } from "@/lib/config/demo-mode";
 import { getCurrentUser, getProjects } from "@/lib/data";
 
 export default async function ProjetosPage() {
@@ -8,5 +9,11 @@ export default async function ProjetosPage() {
 
   const projects = await getProjects(user.id);
 
-  return <ProjetosClient projects={projects} />;
+  return (
+    <ProjetosClient
+      projects={projects}
+      userId={user.id}
+      demoMode={isDemoMode()}
+    />
+  );
 }

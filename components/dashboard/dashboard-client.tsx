@@ -1,30 +1,33 @@
-import { redirect } from "next/navigation";
-import { DashboardClient } from "@/components/dashboard/dashboard-client";
+"use client";
+
 import Link from "next/link";
-import {
-  getCurrentUser,
-  getDashboardMetrics,
-  getUserProfile,
-} from "@/lib/data";
-import { isDemoMode } from "@/lib/config/demo-mode";
+import { useMemo } from "react";
+import { getClientDashboardMetrics } from "@/lib/demo-store/client-store";
+import { useDemoStoreVersion } from "@/lib/demo-store/use-demo-store";
 import { getPlanById } from "@/lib/plans";
 import { formatMinutesUsed, formatRelativeUpdate } from "@/lib/format";
+import type { UserProfile } from "@/lib/types/database";
 
-export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+type DashboardClientProps = {
+  userId: string;
+  profile: UserProfile | null;
+};
 
-  const profile = await getUserProfile(user.id);
+export function DashboardClient({ userId, profile }: DashboardClientProps) {
+  const version = useDemoStoreVersion(true);
 
-  if (isDemoMode()) {
-    return <DashboardClient userId={user.id} profile={profile} />;
-  }
+  const metrics = useMemo(
+    () => getClientDashboardMetrics(userId),
+    [userId, version],
+  );
 
-  const metrics = await getDashboardMetrics(user.id);
   const subscription = metrics.subscription;
   const plan = getPlanById(subscription?.plan ?? "free");
   const usagePercent = subscription
-    ? Math.min(100, Math.round((Number(subscription.minutes_used) / subscription.minutes_limit) * 100))
+    ? Math.min(
+        100,
+        Math.round((Number(subscription.minutes_used) / subscription.minutes_limit) * 100),
+      )
     : 0;
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";

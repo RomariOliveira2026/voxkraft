@@ -2,31 +2,51 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isDemoMode } from "@/lib/config/demo-mode";
+import {
+  deleteClientDemoAudio,
+  getClientAudios,
+  getClientDemoAudioUrl,
+} from "@/lib/demo-store/client-store";
+import { useDemoStoreVersion } from "@/lib/demo-store/use-demo-store";
 import type { Audio } from "@/lib/types/database";
 import { formatDate, formatDuration } from "@/lib/format";
 
 type HistoricoClientProps = {
   audios: Audio[];
+  userId: string;
+  demoMode?: boolean;
 };
 
-export function HistoricoClient({ audios }: HistoricoClientProps) {
+export function HistoricoClient({ audios, userId, demoMode = false }: HistoricoClientProps) {
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const useLocalStore = demoMode || isDemoMode();
+  const storeVersion = useDemoStoreVersion(useLocalStore);
   const [search, setSearch] = useState("");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const sourceAudios = useMemo(() => {
+    if (!useLocalStore) return audios;
+    return getClientAudios(userId);
+  }, [audios, useLocalStore, userId, storeVersion]);
+
   const filtered = useMemo(() => {
     const query = search.toLowerCase();
-    return audios.filter(
+    return sourceAudios.filter(
       (audio) =>
         audio.title.toLowerCase().includes(query) ||
         audio.voice?.name?.toLowerCase().includes(query) ||
         audio.project?.name?.toLowerCase().includes(query),
     );
-  }, [audios, search]);
+  }, [sourceAudios, search]);
 
   async function getSignedUrl(id: string) {
+    if (useLocalStore) {
+      return getClientDemoAudioUrl(userId, id);
+    }
+
     const response = await fetch(`/api/audio/${id}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -70,7 +90,14 @@ export function HistoricoClient({ audios }: HistoricoClientProps) {
   async function handleDelete(id: string) {
     if (!confirm("Deseja excluir este áudio?")) return;
     setDeletingId(id);
+
     try {
+      if (useLocalStore) {
+        deleteClientDemoAudio(userId, id);
+        router.refresh();
+        return;
+      }
+
       const response = await fetch(`/api/audio/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json();

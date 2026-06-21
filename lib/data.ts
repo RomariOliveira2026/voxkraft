@@ -1,14 +1,27 @@
 import { getDemoSession } from "@/lib/auth/demo-session";
-import {
-  getDemoAudios,
-  getDemoDashboardMetrics,
-  getDemoProjects,
-  getDemoSubscription,
-} from "@/lib/demo-store";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { voiceCatalog } from "@/lib/voices/catalog";
 import type { Audio, Invoice, Project, Subscription, UserProfile, Voice } from "@/lib/types/database";
+
+function demoSubscription(userId: string): Subscription {
+  const now = new Date();
+  const periodEnd = new Date(now);
+  periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+  return {
+    id: "demo-subscription",
+    user_id: userId,
+    plan: "free",
+    minutes_limit: 30,
+    minutes_used: 0,
+    status: "active",
+    mercado_pago_subscription_id: null,
+    mercado_pago_preference_id: null,
+    current_period_start: now.toISOString(),
+    current_period_end: periodEnd.toISOString(),
+  };
+}
 
 function demoVoices(): Voice[] {
   return voiceCatalog.map((voice) => ({
@@ -72,7 +85,7 @@ export async function getSubscription(userId: string): Promise<Subscription | nu
   if (!isSupabaseConfigured()) {
     const demoUser = await getDemoSession();
     if (!demoUser || demoUser.id !== userId) return null;
-    return getDemoSubscription(userId);
+    return demoSubscription(userId);
   }
 
   const supabase = await createClient();
@@ -95,16 +108,16 @@ export async function getVoices(): Promise<Voice[]> {
   return data ?? [];
 }
 
-export async function getProjects(userId: string): Promise<Project[]> {
+export async function getProjects(_userId: string): Promise<Project[]> {
   if (!isSupabaseConfigured()) {
-    return getDemoProjects(userId);
+    return [];
   }
 
   const supabase = await createClient();
   const { data: projects } = await supabase
     .from("projects")
     .select("*")
-    .eq("user_id", userId)
+    .eq("user_id", _userId)
     .order("updated_at", { ascending: false });
 
   if (!projects?.length) return [];
@@ -112,7 +125,7 @@ export async function getProjects(userId: string): Promise<Project[]> {
   const { data: audioCounts } = await supabase
     .from("audios")
     .select("project_id")
-    .eq("user_id", userId);
+    .eq("user_id", _userId);
 
   const countMap = (audioCounts ?? []).reduce<Record<string, number>>((acc, audio) => {
     if (audio.project_id) {
@@ -127,16 +140,16 @@ export async function getProjects(userId: string): Promise<Project[]> {
   }));
 }
 
-export async function getAudios(userId: string): Promise<Audio[]> {
+export async function getAudios(_userId: string): Promise<Audio[]> {
   if (!isSupabaseConfigured()) {
-    return getDemoAudios(userId);
+    return [];
   }
 
   const supabase = await createClient();
   const { data } = await supabase
     .from("audios")
     .select("*, voice:voices(name), project:projects(name)")
-    .eq("user_id", userId)
+    .eq("user_id", _userId)
     .order("created_at", { ascending: false });
 
   return (data ?? []) as Audio[];
@@ -159,7 +172,12 @@ export async function getInvoices(userId: string): Promise<Invoice[]> {
 
 export async function getDashboardMetrics(userId: string) {
   if (!isSupabaseConfigured()) {
-    return getDemoDashboardMetrics(userId);
+    return {
+      subscription: demoSubscription(userId),
+      totalAudios: 0,
+      audiosThisMonth: 0,
+      recentProjects: [] as Project[],
+    };
   }
 
   const supabase = await createClient();

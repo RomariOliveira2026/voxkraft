@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { getAudioGenerator } from "@/lib/audio";
-import { getDemoSession } from "@/lib/auth/demo-session";
 import { getCurrentUser } from "@/lib/data";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function POST(request: Request) {
   try {
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Modo demonstração: a geração de áudio ocorre localmente no navegador.",
+        },
+        { status: 503 },
+      );
+    }
+
     const body = await request.json();
     const text = String(body.text ?? "").trim();
     const voiceId = String(body.voiceId ?? "");
@@ -23,17 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Selecione uma voz." }, { status: 400 });
     }
 
-    let userId: string | null = null;
-
-    if (!isSupabaseConfigured()) {
-      const demoUser = await getDemoSession();
-      userId = demoUser?.id ?? null;
-    } else {
-      const user = await getCurrentUser();
-      userId = user?.id ?? null;
-    }
-
-    if (!userId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
     }
 
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         stability,
         similarity,
       },
-      userId,
+      user.id,
     );
 
     return NextResponse.json(result);

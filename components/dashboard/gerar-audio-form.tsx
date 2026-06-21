@@ -2,6 +2,13 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isDemoMode } from "@/lib/config/demo-mode";
+import {
+  createClientDemoAudio,
+  getClientProjects,
+} from "@/lib/demo-store/client-store";
+import { DEMO_GENERATION_DELAY_MS } from "@/lib/demo-store/constants";
+import { useDemoStoreVersion } from "@/lib/demo-store/use-demo-store";
 import type { Project, Voice } from "@/lib/types/database";
 import { estimateDurationLabel } from "@/lib/format";
 
@@ -10,18 +17,28 @@ type GerarAudioFormProps = {
   projects: Project[];
   initialVoiceId?: string;
   initialProjectId?: string;
+  userId: string;
+  demoMode?: boolean;
 };
 
 const REQUEST_TIMEOUT_MS = 30000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function GerarAudioForm({
   voices,
   projects,
   initialVoiceId,
   initialProjectId,
+  userId,
+  demoMode = false,
 }: GerarAudioFormProps) {
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const useLocalStore = useMemo(() => demoMode || isDemoMode(), [demoMode]);
+  const storeVersion = useDemoStoreVersion(useLocalStore);
 
   const defaultVoiceId = initialVoiceId ?? voices[0]?.id ?? "";
   const [text, setText] = useState(
@@ -39,6 +56,11 @@ export function GerarAudioForm({
   const [generatedTitle, setGeneratedTitle] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const availableProjects = useMemo(() => {
+    if (!useLocalStore) return projects;
+    return getClientProjects(userId);
+  }, [useLocalStore, projects, userId, storeVersion]);
+
   const charCount = text.length;
   const durationLabel = useMemo(() => estimateDurationLabel(text, speed), [text, speed]);
 
@@ -47,38 +69,62 @@ export function GerarAudioForm({
     setError(null);
     setSuccess(null);
 
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     try {
-      const response = await fetch("/api/audio/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      if (useLocalStore) {
+        await sleep(DEMO_GENERATION_DELAY_MS);
+
+        const result = createClientDemoAudio({
+          userId,
           text,
           voiceId,
           projectId: projectId || null,
           speed,
           stability: stability / 100,
           similarity: similarity / 100,
-        }),
-        signal: controller.signal,
-      });
+        });
 
-      const data = (await response.json()) as {
-        error?: string;
-        url?: string;
-        audio?: { title: string };
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Erro ao gerar áudio.");
+        setAudioUrl(result.url);
+        setGeneratedTitle(result.audio.title);
+        setSuccess("Áudio gerado com sucesso! Você já pode ouvir, baixar ou consultar no histórico.");
+        router.refresh();
+        return;
       }
 
-      setAudioUrl(data.url ?? null);
-      setGeneratedTitle(data.audio?.title ?? "audio-voxkraft");
-      setSuccess("Áudio gerado com sucesso! Você já pode ouvir, baixar ou consultar no histórico.");
-      router.refresh();
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+      try {
+        const response = await fetch("/api/audio/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            voiceId,
+            projectId: projectId || null,
+            speed,
+            stability: stability / 100,
+            similarity: similarity / 100,
+          }),
+          signal: controller.signal,
+        });
+
+        const data = (await response.json()) as {
+          error?: string;
+          url?: string;
+          audio?: { title: string };
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Erro ao gerar áudio.");
+        }
+
+        setAudioUrl(data.url ?? null);
+        setGeneratedTitle(data.audio?.title ?? "audio-voxkraft");
+        setSuccess("Áudio gerado com sucesso! Você já pode ouvir, baixar ou consultar no histórico.");
+        router.refresh();
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setError("Tempo esgotado. Tente novamente.");
@@ -86,7 +132,6 @@ export function GerarAudioForm({
         setError(err instanceof Error ? err.message : "Erro ao gerar áudio.");
       }
     } finally {
-      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }
@@ -172,7 +217,7 @@ export function GerarAudioForm({
                 className="mt-2 w-full rounded-xl border border-white/10 bg-[#0B102A] p-3 text-sm text-white outline-none focus:border-blue-500"
               >
                 <option value="">Sem projeto</option>
-                {projects.map((project) => (
+                {availableProjects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
                   </option>

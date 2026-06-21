@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { GerarAudioForm } from "@/components/dashboard/gerar-audio-form";
+import { isDemoMode } from "@/lib/config/demo-mode";
 import {
   getCurrentUser,
   getProjects,
@@ -16,6 +17,7 @@ export default async function GerarAudioPage({ searchParams }: PageProps) {
   if (!user) redirect("/login");
 
   const params = await searchParams;
+  const demoMode = isDemoMode();
   const [voices, projects, profile] = await Promise.all([
     getVoices(),
     getProjects(user.id),
@@ -31,6 +33,8 @@ export default async function GerarAudioPage({ searchParams }: PageProps) {
       projects={projects}
       initialVoiceId={initialVoiceId}
       initialProjectId={params.projeto}
+      userId={user.id}
+      demoMode={demoMode}
     />
   );
 }
