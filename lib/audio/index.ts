@@ -11,3 +11,8 @@ export function getAudioGenerator(): AudioGenerator {
 }
 
 export type { GenerateAudioInput, GenerateAudioResult } from "@/lib/audio/types";
+export {
+  getConfiguredVoiceProviderId,
+  getVoiceProvider,
+  listVoiceProviders,
+} from "@/lib/voice-providers";

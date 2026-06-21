@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { generateSpeech } from "@/lib/elevenlabs";
 import { estimateDurationSeconds } from "@/lib/format";
 import type { AudioGenerator, GenerateAudioInput, GenerateAudioResult } from "@/lib/audio/types";
+import { getConfiguredVoiceProviderId, getVoiceProvider } from "@/lib/voice-providers";
+import { resolveExternalVoiceId } from "@/lib/voice-providers/resolve-voice-id";
 
 export class ProductionAudioGenerator implements AudioGenerator {
   async generate(input: GenerateAudioInput, userId: string): Promise<GenerateAudioResult> {
@@ -45,9 +46,18 @@ export class ProductionAudioGenerator implements AudioGenerator {
       throw new Error("Esta voz está disponível apenas no plano Profissional.");
     }
 
-    const audioBuffer = await generateSpeech({
+    const providerId = getConfiguredVoiceProviderId();
+    const voiceProvider = getVoiceProvider(providerId);
+
+    if (!voiceProvider.isAvailable()) {
+      throw new Error(
+        `Provedor de voz "${voiceProvider.displayName}" indisponível. Verifique as variáveis de ambiente.`,
+      );
+    }
+
+    const { audioBuffer } = await voiceProvider.synthesize({
       text,
-      voiceId: voice.elevenlabs_voice_id,
+      externalVoiceId: resolveExternalVoiceId(voice, providerId),
       speed,
       stability,
       similarity,
