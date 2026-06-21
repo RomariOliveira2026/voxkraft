@@ -1,3 +1,4 @@
+import { checkCredits, debitMinutes } from "@/lib/credits";
 import { createClient } from "@/lib/supabase/server";
 import { estimateDurationSeconds } from "@/lib/format";
 import type { AudioGenerator, GenerateAudioInput, GenerateAudioResult } from "@/lib/audio/types";
@@ -35,15 +36,17 @@ export class ProductionAudioGenerator implements AudioGenerator {
       throw new Error("Assinatura não encontrada.");
     }
 
-    const estimatedMinutes = estimateDurationSeconds(text, speed) / 60;
-    const remainingMinutes = subscription.minutes_limit - Number(subscription.minutes_used);
+    const creditCheck = checkCredits({
+      text,
+      speed,
+      voiceIsPremium: voice.is_premium,
+      plan: subscription.plan,
+      minutesLimit: subscription.minutes_limit,
+      minutesUsed: Number(subscription.minutes_used),
+    });
 
-    if (subscription.plan !== "enterprise" && estimatedMinutes > remainingMinutes) {
-      throw new Error("Limite de minutos do plano atingido. Faça upgrade para continuar.");
-    }
-
-    if (voice.is_premium && subscription.plan === "free") {
-      throw new Error("Esta voz está disponível apenas no plano Profissional.");
+    if (!creditCheck.ok) {
+      throw new Error(creditCheck.message);
     }
 
     const providerId = getConfiguredVoiceProviderId();
@@ -105,7 +108,7 @@ export class ProductionAudioGenerator implements AudioGenerator {
     await supabase
       .from("subscriptions")
       .update({
-        minutes_used: Number(subscription.minutes_used) + durationSeconds / 60,
+        minutes_used: debitMinutes(Number(subscription.minutes_used), durationSeconds / 60),
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);

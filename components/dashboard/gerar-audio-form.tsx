@@ -1,16 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { checkCredits, getCreditSnapshot } from "@/lib/credits";
 import { isDemoMode } from "@/lib/config/demo-mode";
 import {
   createClientDemoAudio,
   getClientProjects,
+  getClientSubscription,
 } from "@/lib/demo-store/client-store";
 import { DEMO_GENERATION_DELAY_MS } from "@/lib/demo-store/constants";
 import { useDemoStoreVersion } from "@/lib/demo-store/use-demo-store";
-import type { Project, Voice } from "@/lib/types/database";
-import { estimateDurationLabel } from "@/lib/format";
+import type { Project, Subscription, Voice } from "@/lib/types/database";
+import { estimateDurationLabel, formatMinutesUsed } from "@/lib/format";
 
 type GerarAudioFormProps = {
   voices: Voice[];
@@ -18,6 +21,7 @@ type GerarAudioFormProps = {
   initialVoiceId?: string;
   initialProjectId?: string;
   userId: string;
+  subscription: Subscription;
   demoMode?: boolean;
 };
 
@@ -33,6 +37,7 @@ export function GerarAudioForm({
   initialVoiceId,
   initialProjectId,
   userId,
+  subscription: serverSubscription,
   demoMode = false,
 }: GerarAudioFormProps) {
   const router = useRouter();
@@ -60,6 +65,34 @@ export function GerarAudioForm({
     if (!useLocalStore) return projects;
     return getClientProjects(userId);
   }, [useLocalStore, projects, userId, storeVersion]);
+
+  const subscription = useMemo(() => {
+    if (useLocalStore) return getClientSubscription(userId);
+    return serverSubscription;
+  }, [useLocalStore, userId, storeVersion, serverSubscription]);
+
+  const selectedVoice = useMemo(
+    () => voices.find((voice) => voice.id === voiceId),
+    [voices, voiceId],
+  );
+
+  const credits = useMemo(() => getCreditSnapshot(subscription), [subscription]);
+
+  const creditCheck = useMemo(
+    () =>
+      checkCredits({
+        text,
+        speed,
+        voiceIsPremium: selectedVoice?.is_premium,
+        plan: subscription.plan,
+        minutesLimit: subscription.minutes_limit,
+        minutesUsed: Number(subscription.minutes_used),
+      }),
+    [text, speed, selectedVoice, subscription],
+  );
+
+  const canGenerate = creditCheck.ok && Boolean(text.trim());
+  const creditsBlocked = !creditCheck.ok && creditCheck.reason === "insufficient_credits";
 
   const charCount = text.length;
   const durationLabel = useMemo(() => estimateDurationLabel(text, speed), [text, speed]);
@@ -178,6 +211,24 @@ export function GerarAudioForm({
         </p>
       )}
 
+      {creditsBlocked && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <p>{creditCheck.message}</p>
+          <Link href="/dashboard/assinatura" className="mt-2 inline-block font-medium text-blue-400 hover:underline">
+            Ver planos e fazer upgrade →
+          </Link>
+        </div>
+      )}
+
+      {!creditCheck.ok && creditCheck.reason === "premium_voice" && (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {creditCheck.message}{" "}
+          <Link href="/dashboard/assinatura" className="font-medium text-blue-400 hover:underline">
+            Fazer upgrade
+          </Link>
+        </p>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -228,6 +279,35 @@ export function GerarAudioForm({
         </div>
 
         <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-sm font-bold text-slate-300">Seus créditos</h2>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500">Disponíveis</p>
+                <p className="mt-1 text-lg font-bold">
+                  {credits.isUnlimited
+                    ? "Ilimitado"
+                    : formatMinutesUsed(credits.minutesAvailable)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Utilizados</p>
+                <p className="mt-1 text-lg font-bold">{formatMinutesUsed(credits.minutesUsed)}</p>
+              </div>
+            </div>
+            {!credits.isUnlimited && (
+              <>
+                <p className="mt-3 text-xs text-slate-500">{credits.usagePercent}% consumido</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{ width: `${credits.usagePercent}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
             <h2 className="text-sm font-bold text-slate-300">Configurações de voz</h2>
 
@@ -305,10 +385,14 @@ export function GerarAudioForm({
             <button
               type="button"
               onClick={handleGenerate}
-              disabled={loading || !text.trim()}
+              disabled={loading || !canGenerate}
               className="mt-5 w-full rounded-full bg-blue-600 px-6 py-3.5 text-sm font-bold transition hover:bg-blue-500 disabled:opacity-60"
             >
-              {loading ? "Gerando..." : "Gerar áudio"}
+              {loading
+                ? "Gerando..."
+                : creditsBlocked
+                  ? "Créditos esgotados"
+                  : "Gerar áudio"}
             </button>
             <button
               type="button"

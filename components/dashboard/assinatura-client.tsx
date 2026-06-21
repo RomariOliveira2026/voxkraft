@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { getCreditSnapshot } from "@/lib/credits";
 import { PLANS, getPlanById } from "@/lib/plans";
 import type { Invoice, Subscription } from "@/lib/types/database";
 import { formatDate, formatMinutesUsed } from "@/lib/format";
@@ -21,10 +22,8 @@ export function AssinaturaClient({
   const [message, setMessage] = useState<string | null>(null);
 
   const currentPlan = getPlanById(subscription.plan);
-  const usagePercent = Math.min(
-    100,
-    Math.round((Number(subscription.minutes_used) / subscription.minutes_limit) * 100),
-  );
+  const credits = getCreditSnapshot(subscription);
+  const usagePercent = credits.usagePercent;
 
   async function handleUpgrade(planId: string) {
     setLoadingPlan(planId);
@@ -97,8 +96,15 @@ export function AssinaturaClient({
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-[#070B1F]/50 p-4">
-            <p className="text-sm text-slate-400">Minutos usados</p>
-            <p className="mt-1 text-xl font-bold">{formatMinutesUsed(Number(subscription.minutes_used))}</p>
+            <p className="text-sm text-slate-400">Minutos disponíveis</p>
+            <p className="mt-1 text-xl font-bold">
+              {credits.isUnlimited ? "Ilimitado" : formatMinutesUsed(credits.minutesAvailable)}
+            </p>
+            <p className="text-xs text-slate-500">restantes no plano</p>
+          </div>
+          <div className="rounded-xl bg-[#070B1F]/50 p-4">
+            <p className="text-sm text-slate-400">Minutos utilizados</p>
+            <p className="mt-1 text-xl font-bold">{formatMinutesUsed(credits.minutesUsed)}</p>
             <p className="text-xs text-slate-500">
               de {formatMinutesUsed(subscription.minutes_limit)}
             </p>
@@ -108,6 +114,9 @@ export function AssinaturaClient({
             <p className="mt-1 text-xl font-bold">{audiosThisMonth}</p>
             <p className="text-xs text-slate-500">gerados no período</p>
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl bg-[#070B1F]/50 p-4">
             <p className="text-sm text-slate-400">Próxima cobrança</p>
             <p className="mt-1 text-xl font-bold">
@@ -118,6 +127,11 @@ export function AssinaturaClient({
                 ? formatDate(subscription.current_period_end)
                 : "Sem cobrança"}
             </p>
+          </div>
+          <div className="rounded-xl bg-[#070B1F]/50 p-4">
+            <p className="text-sm text-slate-400">Percentual consumido</p>
+            <p className="mt-1 text-xl font-bold">{usagePercent}%</p>
+            <p className="text-xs text-slate-500">do limite mensal</p>
           </div>
         </div>
 

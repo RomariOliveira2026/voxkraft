@@ -5,6 +5,7 @@ import {
   type DemoAudioRecord,
   type DemoStoreData,
 } from "@/lib/demo-store/types";
+import { checkCredits, debitMinutes, refundMinutes } from "@/lib/credits";
 import { estimateDurationSeconds } from "@/lib/format";
 import type { Audio, Project, Subscription } from "@/lib/types/database";
 import { voiceCatalog } from "@/lib/voices/catalog";
@@ -83,19 +84,22 @@ export function createDemoAudioInStore(
   }
 
   const subscription = buildDemoSubscription(input.userId, store);
-
-  if (voice.isPremium && subscription.plan === "free") {
-    throw new Error("Esta voz está disponível apenas no plano Profissional.");
-  }
-
   const speed = input.speed ?? 1;
-  const durationSeconds = estimateDurationSeconds(input.text, speed);
-  const estimatedMinutes = durationSeconds / 60;
-  const remainingMinutes = subscription.minutes_limit - subscription.minutes_used;
 
-  if (subscription.plan !== "enterprise" && estimatedMinutes > remainingMinutes) {
-    throw new Error("Limite de minutos do plano atingido. Faça upgrade para continuar.");
+  const creditCheck = checkCredits({
+    text: input.text,
+    speed,
+    voiceIsPremium: voice.isPremium,
+    plan: subscription.plan,
+    minutesLimit: subscription.minutes_limit,
+    minutesUsed: subscription.minutes_used,
+  });
+
+  if (!creditCheck.ok) {
+    throw new Error(creditCheck.message);
   }
+
+  const durationSeconds = estimateDurationSeconds(input.text, speed);
 
   const project = input.projectId
     ? store.projects.find((item) => item.id === input.projectId)
@@ -133,7 +137,10 @@ export function createDemoAudioInStore(
 
   const nextStore: DemoStoreData = structuredClone(store);
   nextStore.audios.unshift(record);
-  nextStore.subscription.minutes_used += durationSeconds / 60;
+  nextStore.subscription.minutes_used = debitMinutes(
+    nextStore.subscription.minutes_used,
+    durationSeconds / 60,
+  );
 
   if (project) {
     const index = nextStore.projects.findIndex((item) => item.id === project.id);
@@ -178,9 +185,9 @@ export function deleteDemoAudioInStore(store: DemoStoreData, audioId: string): D
   if (index === -1) return store;
 
   const [removed] = nextStore.audios.splice(index, 1);
-  nextStore.subscription.minutes_used = Math.max(
-    0,
-    nextStore.subscription.minutes_used - removed.duration_seconds / 60,
+  nextStore.subscription.minutes_used = refundMinutes(
+    nextStore.subscription.minutes_used,
+    removed.duration_seconds / 60,
   );
 
   return nextStore;

@@ -1,19 +1,26 @@
 import { redirect } from "next/navigation";
 import { AssinaturaClient } from "@/components/dashboard/assinatura-client";
+import { AssinaturaDemoClient } from "@/components/dashboard/assinatura-demo-client";
 import {
   getCurrentUser,
   getDashboardMetrics,
   getInvoices,
   getSubscription,
 } from "@/lib/data";
+import { isDemoMode } from "@/lib/config/demo-mode";
 
 export default async function AssinaturaPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [subscription, invoices, metrics] = await Promise.all([
+  const invoices = await getInvoices(user.id);
+
+  if (isDemoMode()) {
+    return <AssinaturaDemoClient userId={user.id} invoices={invoices} />;
+  }
+
+  const [subscription, metrics] = await Promise.all([
     getSubscription(user.id),
-    getInvoices(user.id),
     getDashboardMetrics(user.id),
   ]);
 

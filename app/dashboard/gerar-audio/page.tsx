@@ -4,6 +4,7 @@ import { isDemoMode } from "@/lib/config/demo-mode";
 import {
   getCurrentUser,
   getProjects,
+  getSubscription,
   getUserProfile,
   getVoices,
 } from "@/lib/data";
@@ -18,11 +19,14 @@ export default async function GerarAudioPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const demoMode = isDemoMode();
-  const [voices, projects, profile] = await Promise.all([
+  const [voices, projects, profile, subscription] = await Promise.all([
     getVoices(),
     getProjects(user.id),
     getUserProfile(user.id),
+    getSubscription(user.id),
   ]);
+
+  if (!subscription) redirect("/login");
 
   const initialVoiceId =
     params.voz ?? profile?.default_voice_id ?? voices[0]?.id;
@@ -34,6 +38,7 @@ export default async function GerarAudioPage({ searchParams }: PageProps) {
       initialVoiceId={initialVoiceId}
       initialProjectId={params.projeto}
       userId={user.id}
+      subscription={subscription}
       demoMode={demoMode}
     />
   );

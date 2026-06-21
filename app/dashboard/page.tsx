@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { CreditsSummaryCard } from "@/components/dashboard/credits-summary-card";
 import Link from "next/link";
 import {
   getCurrentUser,
@@ -8,7 +9,7 @@ import {
 } from "@/lib/data";
 import { isDemoMode } from "@/lib/config/demo-mode";
 import { getPlanById } from "@/lib/plans";
-import { formatMinutesUsed, formatRelativeUpdate } from "@/lib/format";
+import { formatRelativeUpdate } from "@/lib/format";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -23,10 +24,6 @@ export default async function DashboardPage() {
   const metrics = await getDashboardMetrics(user.id);
   const subscription = metrics.subscription;
   const plan = getPlanById(subscription?.plan ?? "free");
-  const usagePercent = subscription
-    ? Math.min(100, Math.round((Number(subscription.minutes_used) / subscription.minutes_limit) * 100))
-    : 0;
-
   const firstName = profile?.full_name?.split(" ")[0] ?? "Usuário";
 
   return (
@@ -58,21 +55,14 @@ export default async function DashboardPage() {
           <p className="mt-2 text-xs text-emerald-400">+{metrics.audiosThisMonth} este mês</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-sm text-slate-400">Tempo consumido</p>
-          <p className="mt-3 text-4xl font-black">
-            {formatMinutesUsed(Number(subscription?.minutes_used ?? 0))}
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            de {formatMinutesUsed(subscription?.minutes_limit ?? 30)} no plano
-          </p>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-blue-600"
-              style={{ width: `${usagePercent}%` }}
-            />
+        {subscription ? (
+          <CreditsSummaryCard subscription={subscription} />
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <p className="text-sm text-slate-400">Créditos do plano</p>
+            <p className="mt-3 text-4xl font-black">—</p>
           </div>
-        </div>
+        )}
 
         <div className="rounded-2xl border border-blue-500/30 bg-blue-600/10 p-6">
           <p className="text-sm text-blue-300">Plano atual</p>
